@@ -65,7 +65,7 @@ Follow these steps to set up this project locally:
 1. **Download the dataset** from Kaggle and save it in the `data/` directory as `diabetes.csv`.
 
 2. **Split the dataset** into training and test sets  with `src/create_train_test_data.py`
-3. 
+ 
    **Note:** Only use the training data to prevent data leakage.
 
 4. **Exploratory Data Analysis (EDA):**  

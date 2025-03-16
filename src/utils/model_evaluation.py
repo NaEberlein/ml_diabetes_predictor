@@ -64,7 +64,7 @@ def create_result_dataframe(grid_search: GridSearchCV, scoring_metrics: List[str
 
 
 def filter_best_models(result_data: pd.DataFrame, grid_search: GridSearchCV, metric: str,
-                       score_diff_threshold: float = 0.03, std_test_threshold: float = 0.03
+                       score_diff_threshold: float = 0.05, std_test_threshold: float = 0.05
                       ) -> Tuple[pd.Series, Dict[str, Union[str, float]], int]:  
     """
     Filters models based on generalization and stability criteria.
@@ -87,16 +87,17 @@ def filter_best_models(result_data: pd.DataFrame, grid_search: GridSearchCV, met
     ]
 
     if filtered_results.empty:
-        print("No models met the stability and generalization criteria. Selecting the best overall model.")        
-        best_model_idx = result_data[[f"train_test_{metric}_diff", f"std_test_{metric}"]].sum(axis=1).idxmin()
-        filtered_results = result_data.copy()
+        print(f"[Scoring metric: {metric}] No models met the train - val diff < {score_diff_threshold} "
+              f"and std val < {std_test_threshold} criteria. Selecting no model for this metric.")
+        return None, None, None
+
     else:
         best_model_idx = filtered_results[f"mean_test_{metric}"].idxmax()
         
-    best_model_values = filtered_results.loc[best_model_idx]
-    best_hyperparameters = grid_search.cv_results_["params"][best_model_idx]
-
-    return best_model_values, best_hyperparameters, best_model_idx
+        best_model_values = filtered_results.loc[best_model_idx]
+        best_hyperparameters = grid_search.cv_results_["params"][best_model_idx]
+    
+        return best_model_values, best_hyperparameters, best_model_idx
 
 
 
@@ -114,20 +115,54 @@ def select_best_model(best_models: Dict[str, Tuple[pd.Series, Dict[str, Union[st
     Returns:
     Tuple: (best_metric, best_model_values, best_hyperparameters, index)
     """
-    best_metric, best_model = min(
-        best_models.items(),
-        key=lambda item: (
-            sum(item[1][0][f"train_test_{metric}_diff"] for metric in scoring_metrics),  # first select based on diff
-            sum(item[1][0][f"std_test_{metric}"] for metric in scoring_metrics)  # second (tie breaker) select based on std
+    model_scores = []
+
+    for metric, (best_model_values, best_hyperparameters, index) in best_models.items():
+        if best_model_values is None:  # no valid model found
+            continue
+        
+        # sum of test metric, diff train -test metric and std test metric
+        mean_test_score = sum(best_model_values[f"mean_test_{metric}"] for metric in scoring_metrics)
+        train_test_diff_sum = sum(best_model_values[f"train_test_{metric}_diff"] for metric in scoring_metrics)
+        std_test_diff_sum = sum(best_model_values[f"std_test_{metric}"] for metric in scoring_metrics)
+        
+        model_scores.append(
+            (mean_test_score, train_test_diff_sum, std_test_diff_sum, metric, best_model_values, best_hyperparameters, index)
         )
-    )
-    return best_metric, *best_model
+
+    
+    # find model with highest test score metric, followed by smallest diff between train and test and last based on std on test metric
+    model_scores.sort(key=lambda x: (-x[0], x[1], x[2])) 
+    
+    best_model = model_scores[0][-4:]  # only need metric, best_model_values, best_hyperparameters, index
+    return best_model
 
 
+def load_grid_search_results(grid_results_path: str, pipeline_name: str) -> dict:
+    """
+    Loads the grid search results from a pickle file.
+    
+    Parameters:
+    grid_results_path (str): Path to the directory containing the grid search result file.
+    pipeline_name (str): Name of the pipeline to load the results for.
+    
+    Returns:
+    dict: The loaded grid search results.
+    """
+    try:
+        with open(f"{grid_results_path}/grid_search_result_{pipeline_name}.pkl", "rb") as f:
+            return pickle.load(f, fix_imports=True)
+    except FileNotFoundError:
+        print(f"[Error] Grid search result file not found at {grid_results_path}/grid_search_result_{pipeline_name}.pkl")
+        return None
+    except Exception as e:
+        print(f"[Error] Failed to load grid search results: {str(e)}")
+        return None
+        
 
 
 def determine_best_model(pipeline_name : str, grid_results_path: str, scoring_metrics_grid: List[str],
-                          score_diff_threshold: float = 0.05, std_test_threshold: float = 0.05) -> tuple:
+                         score_diff_threshold: float = 0.05, std_test_threshold: float = 0.05) -> tuple:
     """
     Determines the best model based on grid search results.
     Optionally saves the best hyperparameters to a file using pickle.
@@ -143,8 +178,10 @@ def determine_best_model(pipeline_name : str, grid_results_path: str, scoring_me
     """
     
     # Load grid search results
-    with open(f"{grid_results_path}/grid_search_result_{pipeline_name}.pkl", "rb") as f:
-        grid_search_results = pickle.load(f, fix_imports=True)
+    grid_search_results = load_grid_search_results(grid_results_path, pipeline_name)
+    
+    if grid_search_results is None:
+        return None, None
 
     # Create DataFrame from grid search results
     df_results = create_result_dataframe(grid_search_results, scoring_metrics_grid)

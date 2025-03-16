@@ -65,20 +65,23 @@ Follow these steps to set up this project locally:
 1. **Download the dataset** from Kaggle and save it in the `data/` directory as `diabetes.csv`.
 
 2. **Split the dataset** into training and test sets  with `src/create_train_test_data.py`
+3. 
    **Note:** Only use the training data to prevent data leakage.
 
-3. **Exploratory Data Analysis (EDA):**  
+4. **Exploratory Data Analysis (EDA):**  
    Explore and visulaise the data with `notebooks/01_data_exploration.ipynb`.
 
    
-4. **Hyperparameter Tuning:** 
+5. **Hyperparameter Tuning:** 
    Pipelines are defined based on insights from the EDA in `src/pipelines/define_pipelines.py`
 
    Run hyperparameter tuning with Grid Search to optimize the model's performance with `python src/hyperparameter_tuning.py`
+   
    The results of the tuning will be saved in `results/hyperparameter_tuning_results`
 
-5. **Evaluate the Results:**  
+7. **Evaluate the Results:**  
    Explore and evaluate the results from the hyperparameter tuning in the notebook `notebooks/02_model_evaluation.ipynb`
+   
    The best-performing model is saved as a serialized pipeline in `src/models/best_params/best_pipeline_model.pkl`
 
 

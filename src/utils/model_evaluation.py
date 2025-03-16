@@ -118,7 +118,7 @@ def select_best_model(best_models: Dict[str, Tuple[pd.Series, Dict[str, Union[st
     model_scores = []
 
     for metric, (best_model_values, best_hyperparameters, index) in best_models.items():
-        if best_model_values is None:  # no valid model found
+        if best_model_values is None:  # no valid model found -> skip 
             continue
         
         # sum of test metric, diff train -test metric and std test metric

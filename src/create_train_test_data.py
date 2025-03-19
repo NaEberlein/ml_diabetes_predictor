@@ -40,9 +40,7 @@ def load_csv(file_path: str) -> pd.DataFrame:
     try:
         data = pd.read_csv(file_path)
     except pd.errors.EmptyDataError:
-        # Use only the file name, not the full path
-        file_name = os.path.basename(file_path)
-        raise ValueError(f"The CSV file {file_name} is empty.")
+        raise pd.errors.EmptyDataError 
 
     
     # Check if the DataFrame has the correct number of rows (768 rows)
@@ -68,8 +66,7 @@ def save_csv(data: pd.DataFrame, file_path: str) -> None:
     """
     
     # Create parent directory if it doesn't exist
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)    
     data.to_csv(file_path, index=False)
     logging.info(f"Data saved to {file_path}.")
 

@@ -1,9 +1,8 @@
-from setuptools import setup, find_packages
 
 from setuptools import setup, find_packages
 
 setup(
-    name="my_project",  # Project name
+    name="ml_diabetes_predictor",  # Project name
     version="0.1",  # Initial version
     packages=find_packages(where="src"),  # Automatically find all packages in the 'src' directory
     package_dir={"": "src"},  # Specify the base directory for your packages
@@ -13,6 +12,7 @@ setup(
         "matplotlib==3.10.1",  
         "seaborn",
         "scikit-learn", 
-        "shap",  
+        "shap", 
+        "pytest"
     ],
 )

@@ -5,15 +5,16 @@ from sklearn.pipeline import Pipeline
 
 import pipelines.custom_pipeline_components as pipeline_comp
 
-def create_pipeline_with_imputer_and_classifier(imputer: object, features: list, add_kmeans: bool = True, random_state: int = 42) -> Pipeline:
+def create_pipeline_with_imputer_and_classifier(imputer: object, features: list, add_kmeans: bool = True,
+                                                classifier: object = RandomForestClassifier(random_state=42)) -> Pipeline:
     """
-    Helper function to create pipelines with imputation, KMeans clustering, and RandomForest classifier.
+    Helper function to create pipelines with imputation, KMeans clustering, and a specified classifier.
     
     Parameters:
     imputer: The imputer to use for missing data (e.g., SimpleImputer, KNNImputer, or None).
     features: The features to be passed to the pipeline.
     add_kmeans: Whether to add KMeans clustering features or not (default is True).
-    random_state: Random state for reproducibility (default is 42).
+    classifier: The classifier to use (default is RandomForestClassifier).
     
     Returns:
     A pipeline with the chosen transformations.
@@ -22,6 +23,7 @@ def create_pipeline_with_imputer_and_classifier(imputer: object, features: list,
     scaler = StandardScaler()
     rename_features = pipeline_comp.RenameFeatures()
     preprocess_features = pipeline_comp.PreprocessFeatures(features_no_measurements=["Glucose", "BP", "Skin", "Insulin", "BMI"])
+    
     # Create preprocessing pipeline
     preprocessing_pipeline = [
         ("rename", rename_features),
@@ -36,12 +38,24 @@ def create_pipeline_with_imputer_and_classifier(imputer: object, features: list,
     if add_kmeans:
         steps.append(("add_kmeans", pipeline_comp.AddKMeansClusterFeatures(k=2, features=features)))
     
-    # Add the classifier at the end
-    steps.append(("classifier", RandomForestClassifier(random_state=random_state)))
+    # Use the provided classifier or default to RandomForest
+    steps.append(("classifier", classifier))
     
     return Pipeline(steps)
 
+def pipeline_before_classifier(pipeline : Pipeline) -> Pipeline:
+    """ Returns Pipeline with all steps before classifier
 
+    Parameters:
+    pipeline: complete pipeline (can include the classifier).
+
+    Return:
+    The pipeline with all the steps before the classifier.
+    """
+    steps_before_classifier = [(name, step) for name, step in pipeline.named_steps.items() if name != "classifier"]
+    return Pipeline(steps_before_classifier)
+
+    
 def define_pipelines(features: list) -> dict:
     """
     Returns a dictionary of pipelines for various imputation methods

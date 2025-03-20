@@ -5,6 +5,11 @@ from sklearn.pipeline import Pipeline
 
 import pipelines.custom_pipeline_components as pipeline_comp
 
+from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestClassifier
+
 def create_pipeline_with_imputer_and_classifier(imputer: object, features: list, add_kmeans: bool = True,
                                                 classifier: object = RandomForestClassifier(random_state=42)) -> Pipeline:
     """
@@ -27,12 +32,23 @@ def create_pipeline_with_imputer_and_classifier(imputer: object, features: list,
     # Create preprocessing pipeline
     preprocessing_pipeline = [
         ("rename", rename_features),
-        ("preprocess", preprocess_features),
-        ("scaler", scaler),
+        ("preprocess", preprocess_features)
     ]
     
-    # Start the steps with preprocessing and imputation
-    steps = preprocessing_pipeline + [("imputer", imputer)]
+    # Handle imputer and scaling based on which imputer is used
+    if isinstance(imputer, KNNImputer):
+        # If KNNImputer, scale before imputation
+        steps = preprocessing_pipeline + [("scaler", scaler), ("imputer", imputer)]
+    elif isinstance(imputer, pipeline_comp.KNNImputationByGroup):
+        # If KNNImputationByGroup, scale before imputation
+        steps = preprocessing_pipeline + [("scaler", scaler), ("imputer", imputer)]
+        
+    elif isinstance(imputer, SimpleImputer):
+        # If SimpleImputer, scale after imputation
+        steps = preprocessing_pipeline + [("imputer", imputer), ("scaler", scaler)]
+    else:
+        # If no imputer, just preprocess and scale
+        steps = preprocessing_pipeline + [("scaler", scaler)]
     
     # Optionally add KMeans clustering features
     if add_kmeans:
@@ -42,6 +58,7 @@ def create_pipeline_with_imputer_and_classifier(imputer: object, features: list,
     steps.append(("classifier", classifier))
     
     return Pipeline(steps)
+
 
 def pipeline_before_classifier(pipeline : Pipeline) -> Pipeline:
     """ Returns Pipeline with all steps before classifier

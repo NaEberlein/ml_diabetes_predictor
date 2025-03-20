@@ -44,4 +44,4 @@ if __name__ == "__main__":
         grid_search = tune.perform_grid_search(pipeline, param_grid, scoring_metrics, X_train, y_train)
         
         # Save results only if grid search was successful
-        tune.save_grid_search_results(pipeline_name, grid_search, save_path="../results/grid_search_results_log_regression")
+        tune.save_grid_search_results(pipeline_name, grid_search, save_path="../../results/grid_search_results_log_regression")

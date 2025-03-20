@@ -202,13 +202,15 @@ def determine_best_model(pipeline_name : str, grid_results_path: str, scoring_me
     return best_hyperparameters, best_model_scores
 
 
-def save_best_params(best_hyperparameters: dict, pipeline_name: str, save_directory: str = "../src/models/best_params") -> None:
+def save_best_params(best_hyperparameters: dict, pipeline_name: str, classifier_type: str ,
+                     save_directory: str = "../src/models/best_params") -> None:
     """
     Saves the best hyperparameters to a pickle file.
 
     Parameters:
     best_hyperparameters (dict): The best hyperparameters to save.
     pipeline_name (str): Name of the pipeline (used for filename).
+    classifier_type (str): Additional flag to add the classifier type.
     save_directory (str): Directory to save the file. Defaults to '../src/models/best_params'.
     """
 
@@ -216,7 +218,7 @@ def save_best_params(best_hyperparameters: dict, pipeline_name: str, save_direct
     os.makedirs(save_directory, exist_ok=True)
 
     # Define the save file path
-    save_filename = f"{pipeline_name}_best_params.pkl"
+    save_filename = f"{pipeline_name}_best_params_{classifier_type}.pkl"
     save_filepath = os.path.join(save_directory, save_filename)
 
     # Save the hyperparameters using pickle

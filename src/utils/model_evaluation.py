@@ -2,12 +2,15 @@ import pickle
 import os
 
 import pandas as pd
-from sklearn.model_selection import GridSearchCV
+import numpy as np
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_score, recall_score
+from sklearn.metrics import (accuracy_score, f1_score, recall_score, 
+                             precision_score, roc_auc_score, make_scorer)
+from sklearn.model_selection import TunedThresholdClassifierCV
+
 
 from typing import Dict, List, Tuple, Union
-
 
 def create_result_dataframe(grid_search: GridSearchCV, scoring_metrics: List[str]) -> pd.DataFrame:
     """
@@ -23,45 +26,41 @@ def create_result_dataframe(grid_search: GridSearchCV, scoring_metrics: List[str
     if not hasattr(grid_search, "cv_results_"):
         raise ValueError("GridSearchCV object does not contain results. Ensure it has been fitted.")
 
-    cv_results = grid_search.cv_results_    
+    cv_results = grid_search.cv_results_
+    n_splits = grid_search.cv.get_n_splits()  # Get number of splits from cross-validation
 
-    # Defining column names for df
-    columns = [f"{prefix}_{metric}" for metric in scoring_metrics for prefix in ["mean_train", "mean_test", "std_train", "std_test"]]
-    columns += [f"split{split}_train_{metric}" for split in range(grid_search.n_splits_) for metric in scoring_metrics]
-    columns += [f"split{split}_test_{metric}" for split in range(grid_search.n_splits_) for metric in scoring_metrics]
+    # Prepare dictionary to hold the data for the DataFrame
+    result_data = {}
 
-
-    # Create the result dataframe
-    result_data = pd.DataFrame(columns=columns)
-
-    # Loop through each metric and fill the dataframe
+    # Loop through each metric and fill the dictionary
     for metric in scoring_metrics:
-        # Extract the relevant columns for each metric
-        mean_train = f"mean_train_{metric}"
-        std_train = f"std_train_{metric}"
-        mean_test = f"mean_test_{metric}"
-        std_test = f"std_test_{metric}"
-    
-        # Assign values to the result dataframe for each metric individually
-        result_data[mean_train] = cv_results[mean_train]
-        result_data[std_train] = cv_results[std_train]
-        result_data[mean_test] = cv_results[mean_test]
-        result_data[std_test] = cv_results[std_test]
-    
-        # Add per-split accuracy values
-        for split in range(grid_search.cv.n_splits):  # Adjusted for cv in grid_search
-            # Per split train and test values
-            split_train = f"split{split}_train_{metric}"
-            split_test = f"split{split}_test_{metric}"
-    
-            # Add the per-split values to the result dataframe
-            result_data[split_train] = cv_results[split_train]
-            result_data[split_test] = cv_results[split_test]
+        # Extract relevant columns for each metric
+        mean_train_col = f"mean_train_{metric}"
+        std_train_col = f"std_train_{metric}"
+        mean_test_col = f"mean_test_{metric}"
+        std_test_col = f"std_test_{metric}"
 
-        result_data[f"train_test_{metric}_diff"] = abs(result_data[f"mean_train_{metric}"] - result_data[f"mean_test_{metric}"])
+        # Fill in the dictionary with mean and std columns for train and test
+        result_data[mean_train_col] = cv_results[mean_train_col]
+        result_data[std_train_col] = cv_results[std_train_col]
+        result_data[mean_test_col] = cv_results[mean_test_col]
+        result_data[std_test_col] = cv_results[std_test_col]
 
-    return result_data
+        # Add per-split accuracy values to the dictionary
+        for split in range(n_splits):
+            split_train_col = f"split{split}_train_{metric}"
+            split_test_col = f"split{split}_test_{metric}"
 
+            result_data[split_train_col] = cv_results[split_train_col]
+            result_data[split_test_col] = cv_results[split_test_col]
+
+        # Calculate and add the difference between mean train and test scores
+        result_data[f"train_test_{metric}_diff"] = abs(cv_results[mean_train_col] - cv_results[mean_test_col])
+
+    # Convert the result_data dictionary to a DataFrame
+    result_df = pd.DataFrame(result_data)
+
+    return result_df
 
 def filter_best_models(result_data: pd.DataFrame, grid_search: GridSearchCV, metric: str,
                        score_diff_threshold: float = 0.05, std_test_threshold: float = 0.05
@@ -102,15 +101,17 @@ def filter_best_models(result_data: pd.DataFrame, grid_search: GridSearchCV, met
 
 
 def select_best_model(best_models: Dict[str, Tuple[pd.Series, Dict[str, Union[str, float]], int]], 
-                      scoring_metrics: List[str]) -> Tuple[str, pd.Series, Dict[str, Union[str, float]], int]:
+                      selection_metrics: List[str]) -> Tuple[str, pd.Series, Dict[str, Union[str, float]], int]:
     """
-    Selects the best model based on the lowest sum of train-val differences (good generalisation).
-    In case of a tie, selects the model with the lowest standard deviation sum (good stability).
+    Selects the best model based on the follwing criteria:
+    1. mean of selection metrics
+    2. lowest mean of train-val differences of selection metrics (good generalisation).
+    3. lowest mean standard deviation sum of selection metrics(good stability).
 
     Parameters:
     best_models (dict): A dictionary where keys are scoring metrics and values are tuples of 
                         (best_model_values, best_hyperparameters, index).
-    scoring_metrics (List[str]): A list of scoring metrics used for selection.
+    selection_metrics (List[str]): A list of metrics used for selection.
 
     Returns:
     Tuple: (best_metric, best_model_values, best_hyperparameters, index)
@@ -121,13 +122,12 @@ def select_best_model(best_models: Dict[str, Tuple[pd.Series, Dict[str, Union[st
         if best_model_values is None:  # no valid model found -> skip 
             continue
         
-        # sum of test metric, diff train -test metric and std test metric
-        mean_test_score = sum(best_model_values[f"mean_test_{metric}"] for metric in scoring_metrics)
-        train_test_diff_sum = sum(best_model_values[f"train_test_{metric}_diff"] for metric in scoring_metrics)
-        std_test_diff_sum = sum(best_model_values[f"std_test_{metric}"] for metric in scoring_metrics)
-        
+        # mean of test metric, diff train - test metric and std test metric
+        mean_test_score = np.mean([best_model_values[f"mean_test_{m}"] for m in selection_metrics])
+        mean_train_test_diff = np.mean([best_model_values[f"train_test_{m}_diff"] for m in selection_metrics])
+        mean_std_test = np.mean([best_model_values[f"std_test_{m}"] for m in selection_metrics])
         model_scores.append(
-            (mean_test_score, train_test_diff_sum, std_test_diff_sum, metric, best_model_values, best_hyperparameters, index)
+            (mean_test_score, mean_train_test_diff, mean_std_test, metric, best_model_values, best_hyperparameters, index)
         )
 
     
@@ -158,18 +158,57 @@ def load_grid_search_results(grid_results_path: str, pipeline_name: str) -> dict
     except Exception as e:
         print(f"[Error] Failed to load grid search results: {str(e)}")
         return None
+
+
+        
+
+def print_model_metrics(best_models: Dict[str, List[Tuple[pd.DataFrame]]]) -> None:
+    """
+    Prints the performance metrics of the models chosen based on various metrics.
+    
+    Parameters:
+    - best_models (Dict[str, List[Tuple[pd.DataFrame]]]): A dictionary where keys are the model names,
+      and values are lists containing tuples with DataFrames holding the metrics.
+
+    """
+    metrics = list(best_models.keys())
+    rows = []
+    for m in metrics:
+        rows.append(f"{m.replace('_',' ').capitalize()} val.")
+        rows.append(f"{m.replace('_',' ').capitalize()} diff. train - val.")
+    data = pd.DataFrame(index = rows)
+    
+    # Loop through each model (for each model, extract the metrics)
+    for model_name in best_models:
+        df_model = best_models[model_name][0]  # Get the DataFrame for the current model
+        column_data = []
+        for m in metrics:
+            column_data.append(f"{df_model[f'mean_test_{m}']:.3f} ± {df_model[f'std_test_{m}']:.3f}")  # mean ± std
+            column_data.append(f"{df_model[f'train_test_{m}_diff']:.3f}")  # train-test diff
+
+        # Append the row data to the table data
+        data[f"{model_name.replace('_', ' ').capitalize()}"] = column_data    
+    multi_index = pd.MultiIndex.from_product([["BEST MODELS BASED ON METRIC"], data.columns])
+    
+    # Assign MultiIndex to DataFrame
+    data.columns = multi_index
+
+   
+    print(f"\nComparison of Metrics for Each Model:\n"
+          f"{data.to_string()}"
+          f"\n\nThe final model is selected based on the highest average validation score across all metrics.")
         
 
 
-def determine_best_model(pipeline_name : str, grid_results_path: str, scoring_metrics_grid: List[str],
-                         score_diff_threshold: float = 0.05, std_test_threshold: float = 0.05) -> tuple:
+def determine_best_model(pipeline_name : str, grid_results_path: str, selection_metrics: List[str],
+                         score_diff_threshold: float = 0.05, std_test_threshold: float = 0.05, printing: bool = False) -> tuple:
     """
     Determines the best model based on grid search results.
     Optionally saves the best hyperparameters to a file using pickle.
 
     Parameters:
     grid_results_path: Path to the saved grid search results.
-    scoring_metrics_grid: List of metrics to evaluate the best model.
+    selection_metrics: List of metrics to evaluate the best model.
     score_diff_threshold: Minimum difference required between train and validation score.
     std_test_threshold: Threshold for standard deviation of test score.
 
@@ -184,19 +223,30 @@ def determine_best_model(pipeline_name : str, grid_results_path: str, scoring_me
         return None, None
 
     # Create DataFrame from grid search results
-    df_results = create_result_dataframe(grid_search_results, scoring_metrics_grid)
+    df_results = create_result_dataframe(grid_search_results, selection_metrics)
 
     # Filter and select the best models for each metric
     best_models = {}
-    for metric in scoring_metrics_grid:
+    for metric in selection_metrics:
         best_model_values, best_params, best_model_idx = filter_best_models(
             df_results, grid_search_results, metric, score_diff_threshold, std_test_threshold)
         best_models[metric] = (best_model_values, best_params, best_model_idx)
+    
+    # print the results of the best models
+    if printing: 
+        print(f"Model Selection Criteria applied:\n"
+              f"- Highest validation metric score\n"
+              f"- Train-validation difference < {score_diff_threshold}\n"
+              f"- Validation standard deviation < {std_test_threshold}\n"
+              f"\nFor each metric, the best model is selected based on the above criteria.")
+        print_model_metrics(best_models)
 
     # Select the best model overall (based on the provided metrics)
     best_metric, best_model_values, best_hyperparameters, best_model_idx = select_best_model(
-        best_models, scoring_metrics_grid)
+        best_models, selection_metrics)
 
+
+    
     # values of best model 
     best_model_scores = df_results.iloc[best_model_idx]
     return best_hyperparameters, best_model_scores
@@ -255,7 +305,9 @@ def evaluate_and_plot_best_model(pipeline: Pipeline, best_hyperparameters: Dict[
     # Plot the feature importance
     plot_train.plot_best_model_feature_importance(best_hyperparameters, pipeline, X_train, y_train, features)
 
-    
+
+
+        
 def print_best_params(best_params: Dict[str, Union[str, float]]) -> None:
     """
     Prints the best hyperparameters.

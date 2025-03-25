@@ -30,18 +30,19 @@ if __name__ == "__main__":
     pipelines_dict = pipeline_def.define_pipelines()
 
     # Hyperparameter grid and scoring metrics
-    scoring_metrics = ['accuracy', 'roc_auc', 'f1']
+    scoring_metrics = ['accuracy', 'roc_auc', 'f1', 'recall', 'precision']
     param_grid = {
-       "classifier__n_estimators": [100, 200, 500],
-       "classifier__max_depth": [3, 5, 7],
-       "classifier__min_samples_split": [5, 10, 20, 30],
-       "classifier__min_samples_leaf": [2, 5, 10],
-       "classifier__max_features": ["log2", "sqrt", 0.5],
-       "classifier__class_weight": ["balanced"],
-       "classifier__bootstrap": [True],
-       "classifier__max_samples": [0.6, 0.7, 0.8],
-       "classifier__criterion": ["gini", "entropy"],
+        "classifier__n_estimators": [80, 100, 120, 150],
+        "classifier__max_depth": [3, 4, 5],
+        "classifier__min_samples_split": [5, 10],
+        "classifier__min_samples_leaf": [2, 5],
+        "classifier__max_features": ["sqrt", 0.5],
+        "classifier__class_weight": ["balanced", None],
+        "classifier__bootstrap": [True],
+        "classifier__max_samples": [0.6, 0.7],
+        "classifier__criterion": ["gini", "entropy"],
     }
+
 
     # Perform grid search for each pipeline
     for pipeline_name, pipeline in pipelines_dict.items():

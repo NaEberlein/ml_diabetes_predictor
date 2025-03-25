@@ -29,9 +29,9 @@ if __name__ == "__main__":
     pipelines_dict = pipeline_def.define_pipelines()
 
     # Hyperparameter grid and scoring metrics
-    scoring_metrics = ['accuracy', 'roc_auc', 'f1']
+    scoring_metrics = ['accuracy', 'roc_auc', 'f1', 'recall', 'precision']
     param_grid = {
-        "classifier__C": [0.1, 1, 10],  # Regularization strength
+        "classifier__C": [0.01, 0.1, 1, 10, 50],  # Regularization strength
         "classifier__solver": ['liblinear', 'lbfgs'],  # Solvers for Logistic Regression
         "classifier__max_iter": [100, 200, 500],  # Max iterations for convergence
         "classifier__penalty": ['l2'],  # Penalty type for regularization

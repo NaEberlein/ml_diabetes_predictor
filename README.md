@@ -84,7 +84,6 @@ Follow these steps to set up this project locally:
    Run hyperparameter tuning with Grid Search to optimize the model's performance with scripts in  `python src/grid_searches/`
    
 7. **Evaluate the Grid Search:**  
-   Explore and evaluate the results from the hyperparameter tuning in the notebooks
 
    `notebooks/02a_model_evaluation_random_forest.ipynb` and `notebooks/02b_model_evaluation_log_regression.ipynb`
    
@@ -129,7 +128,6 @@ Follow these steps to set up this project locally:
 - Explore feature engineering techniques to help mitigate **Random Forest** overfitting.
 - Experiment with other classifiers (f.e.**XGBoost**) for potential improvements.
 --- 
-
 
 
 ## License

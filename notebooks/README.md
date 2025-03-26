@@ -1,8 +1,4 @@
-# Notebooks Directory
-
-This directory contains Jupyter notebooks used for data exploration and evaluation of various machine learning pipelines.
-
-## Notebooks
+# Notebooks
 
 ### Data Exploration
 `01_data_exploration.ipynb`

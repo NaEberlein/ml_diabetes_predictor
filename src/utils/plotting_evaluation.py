@@ -102,23 +102,17 @@ def plot_feature_importance(importances : np.ndarray, feature_names : list) -> N
     plt.close()
 
 
-def plot_best_model_feature_importance(best_pipeline: Pipeline,
-                                       X_train : pd.DataFrame, y_train : pd.DataFrame, features: list) -> None:
+def plot_best_model_feature_importance(pipeline: Pipeline, features: list) -> None:
     """
     Plots the feature importances for the best model based on the hyperparameters.
     
     Parameters:
-    best_pipeline (Pipeline): The fitted pipeline with preprocessing steps.
-    X_train: Training features.
-    y_train: Training labels.
+    pipeline (Pipeline): The fitted pipeline with preprocessing steps.
     features (list): List of feature names.
     """
     
-    # Train the model with the best hyperparameters
-    best_pipeline.fit(X_train, y_train)
-    
     # Get the classifier model from the pipeline
-    classifier = best_pipeline.named_steps.get("classifier", None)
+    classifier = pipeline.named_steps.get("classifier", None)
     
     if classifier is None:
         print("No classifier found in the pipeline!")
@@ -136,7 +130,7 @@ def plot_best_model_feature_importance(best_pipeline: Pipeline,
         return
     
     # If KMeans clustering is part of the pipeline, add "Cluster" to the feature names
-    if "add_kmeans" in best_pipeline.named_steps:
+    if "add_kmeans" in pipeline.named_steps:
         feature_names = features + ["Cluster"]  # Add the new "Cluster" feature
     else:
         feature_names = features
@@ -144,42 +138,44 @@ def plot_best_model_feature_importance(best_pipeline: Pipeline,
     plot_feature_importance(feature_importances, feature_names)
 
 
-def plot_shap_values_for_class_1(best_pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series, features: list) -> None:
+
+def plot_shap_values_for_class_1(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.DataFrame, features: list) -> None:
     """
     Plots the SHAP summary plot for class 1 (diabetic) using the given pipeline and training data.
 
     Parameters:
-    best_pipeline (Pipeline): The trained pipeline with preprocessing and classification steps.
-    X_train (pd.DataFrame): The training feature data.
-    y_train (pd.Series): The target labels for the training data.
+    pipeline (Pipeline): The fitted pipeline with preprocessing and classification steps.
+    X_train (pd.DataFrame): The feature training data.
+    y_train (DataFrame): The target labels for the training data.
     features (list): list of all the features.
     """
     
     # Extract preprocessing pipeline and fit it
-    preprocessing_pipeline = best_pipeline[:-1]
+    preprocessing_pipeline = pipeline[:-1]
     preprocessing_pipeline.fit(X_train, y_train)
     X_train_transformed = preprocessing_pipeline.fit_transform(X_train)  # Apply transformation
-
+    
+    
     # Get the trained model
-    trained_model = best_pipeline[-1]  # The classifier part of the pipeline
+    trained_model = pipeline[-1]  # The classifier part of the pipeline
 
     # If KMeans clustering is part of the pipeline, add "Cluster" to the feature names
-    if "add_kmeans" in best_pipeline.named_steps:
+    if "add_kmeans" in pipeline.named_steps:
         feature_names = features + ["Cluster"]  # Add the new "Cluster" feature
     else:
         feature_names = features
 
     
-    # Create SHAP explainer and calculate SHAP values
+    # Create SHAP explainer and calculate SHAP values for class 1
     if isinstance(trained_model, LogisticRegression):
         explainer = shap.Explainer(trained_model, X_train_transformed) 
         shap_values = explainer(X_train_transformed)
-        shap.summary_plot(shap_values, X_train_transformed, feature_names=feature_names, plot_size=(6, 5)) # For class 1
+        shap.summary_plot(shap_values, X_train_transformed, feature_names=feature_names, plot_size=(6, 5)) 
     else:    
         explainer = shap.TreeExplainer(trained_model)
         shap_values = explainer.shap_values(X_train_transformed)
         # Plot SHAP summary for class 1 (diabetic)
-        shap.summary_plot(shap_values[:, :, 1], X_train_transformed, feature_names=feature_names, plot_size=(6, 5))  # For class 1
+        shap.summary_plot(shap_values[:, :, 1], X_train_transformed, feature_names=feature_names, plot_size=(6, 5))
 
 
 def plot_learning_curve(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.DataFrame,
@@ -219,3 +215,83 @@ def plot_learning_curve(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.D
     plt.title(f"Learning Curve ({scoring_metric.replace('_',' ')})")
     plt.legend()
     plt.show()
+
+
+
+def plot_confusion_matrix(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.DataFrame, 
+                          X_test: pd.DataFrame, y_test: pd.DataFrame) -> None:
+    """
+    Plots confusion matrices for both test and train data side by side.
+
+    Parameters:
+    pipeline (Pipeline): The trained pipeline with preprocessing and classifier.
+    X_train (np.ndarray): Features for the training data.
+    y_train (np.ndarray or pd.Series): True labels for the training data.
+    X_test (np.ndarray): Features for the test data.
+    y_test (np.ndarray or pd.Series): True labels for the test data.
+    """
+    # Predict on the test and train data
+    y_test_pred = pipeline.predict(X_test)
+    y_train_pred = pipeline.predict(X_train)
+    
+    # Generate confusion matrices for both test and train data (normalised for better comparison)
+    cm_test = confusion_matrix(y_test, y_test_pred, normalize='true')
+    cm_train = confusion_matrix(y_train, y_train_pred, normalize='true')
+    
+    # Set up the subplot for side-by-side comparison
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+    
+    # Plot test confusion matrix
+    sns.heatmap(cm_test, annot=True, fmt=".2f", cmap="Blues", xticklabels=class_names.values(), yticklabels=class_names.values(), ax=axes[0])
+    axes[0].set_title('Confusion Matrix - Test Data')
+    axes[0].set_xlabel('Predicted Labels')
+    axes[0].set_ylabel('True Labels')
+    
+    # Plot train confusion matrix
+    sns.heatmap(cm_train, annot=True, fmt=".2f", cmap="Blues", xticklabels=class_names.values(), yticklabels=class_names.values(), ax=axes[1])
+    axes[1].set_title('Confusion Matrix - Train Data')
+    axes[1].set_xlabel('Predicted Labels')
+    axes[1].set_ylabel('True Labels')
+    
+    # Adjust layout for better visualization
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+def plot_roc_curve(pipeline: Pipeline,  X_train: pd.DataFrame, y_train: pd.DataFrame, 
+                          X_test: pd.DataFrame, y_test: pd.DataFrame) -> None:
+    """
+    Plots the ROC curve for the test and train data and computes the AUC score.
+
+    Parameters:
+    pipeline (Pipeline): The trained pipeline with preprocessing and classifier.
+    X_train (pd.DataFrame): Features for the training data.
+    y_train (pd.DataFrame): True labels for the training data.
+    X_test (pd.DataFrame): Features for the test data.
+    y_test (pd.DataFrame): True labels for the test data.
+    """
+     # Predict probabilities for test and train data
+    y_test_pred_proba = pipeline.predict_proba(X_test)
+    y_train_pred_proba = pipeline.predict_proba(X_train)
+
+    # Compute ROC curve and AUC score for test data
+    fpr_test, tpr_test, thresholds_test = roc_curve(y_test, y_test_pred_proba[:, 1])
+    roc_auc_test = auc(fpr_test, tpr_test)
+
+    # Compute ROC curve and AUC score for train data
+    fpr_train, tpr_train, thresholds_train = roc_curve(y_train, y_train_pred_proba[:, 1])
+    roc_auc_train = auc(fpr_train, tpr_train)
+
+    plt.figure(figsize=(4,4))
+    plt.plot(fpr_test, tpr_test, lw=2, label=f'Test ROC curve (AUC = {roc_auc_test:.2f})')
+    plt.plot(fpr_train, tpr_train, lw=2, label=f'Train ROC curve (AUC = {roc_auc_train:.2f})')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend(loc="lower right")
+    plt.show()
+    plt.close()
+

@@ -7,7 +7,7 @@ from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import (accuracy_score, f1_score, recall_score, 
                              precision_score, roc_auc_score, make_scorer)
-from sklearn.model_selection import TunedThresholdClassifierCV
+from sklearn.model_selection import TunedThresholdClassifierCV, cross_validate
 
 
 from typing import Dict, List, Tuple, Union
@@ -321,24 +321,37 @@ def print_best_params(best_params: Dict[str, Union[str, float]]) -> None:
 
 
 
-def evaluate_model_performance(best_pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series) -> None:
+def evaluate_model_performance(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.DataFrame,
+                               X_test: pd.DataFrame, y_test: pd.DataFrame) -> None:
     """
     Calculates and prints evaluation metrics (Accuracy, F1, ROC AUC, Precision, Recall) for both training and testing data.
 
     Parameters:
-    best_pipeline (Pipeline): The trained pipeline with preprocessing and classifier.
+    pipeline (Pipeline): The trained pipeline with preprocessing and classifier.
     X_train (pd.DataFrame): The feature data for training.
-    y_train (pd.Series): The true labels for the training data.
+    y_train (pd.DataFrame): The true labels for the training data.
     X_test (pd.DataFrame): The feature data for testing.
-    y_test (pd.Series): The true labels for the testing data.
+    y_test (pd.DataFrame): The true labels for the testing data.
     """
     # Predict on the test and train data
-    y_pred = best_pipeline.predict(X_test)
-    y_train_pred = best_pipeline.predict(X_train)
-    y_pred_proba = best_pipeline.predict_proba(X_test)
-    y_train_pred_proba = best_pipeline.predict_proba(X_train)
+    y_pred = pipeline.predict(X_test)
+    y_train_pred = pipeline.predict(X_train)
+    y_pred_proba = pipeline.predict_proba(X_test)
+    y_train_pred_proba = pipeline.predict_proba(X_train)
+
+    scoring = ['accuracy', 'f1', 'roc_auc', 'precision', 'recall']
+    cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42) # same as in hyperparameter tuning
+    cv_results = cross_validate(pipeline, X_train, y_train, cv=cv, scoring=scoring)
+   
+    print(f"Evaluation Metrics (Cross-validation Data):")
+
+    for metric in scoring:
+        mean = cv_results[f'test_{metric}'].mean()
+        std = cv_results[f'test_{metric}'].std()
+        print(f"{metric.replace('_',' ').capitalize()}: {mean:.4f} ± {std:.4f}")
+
     # Print the evaluation results
-    print(f"Evaluation Metrics (Test Data):\n"
+    print(f"\nEvaluation Metrics (Test Data):\n"
           f"Accuracy: {round(accuracy_score(y_test, y_pred), 4)}\n"
           f"F1 Score: {round(f1_score(y_test, y_pred), 4)}\n"
           f"ROC AUC: {round(roc_auc_score(y_test, y_pred_proba[:,1]), 4)}\n"
